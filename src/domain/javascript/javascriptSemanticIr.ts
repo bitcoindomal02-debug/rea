@@ -1,5 +1,8 @@
 import type { JavaScriptSourceRange } from "./javascriptStaticAnalysisTypes.js";
-import type { JavaScriptSemanticValue } from "./javascriptSemanticValueTypes.js";
+import type {
+  JavaScriptSemanticPrimitive,
+  JavaScriptSemanticValue,
+} from "./javascriptSemanticValueTypes.js";
 import type {
   JavaScriptSemanticCoverage,
   JavaScriptSemanticReturnCoverage,
@@ -126,6 +129,12 @@ export interface JavaScriptSemanticCallArgument {
   readonly index: number;
   readonly location: JavaScriptSourceRange;
   readonly spread: boolean;
+  /** Source-observed entries of a small, entirely literal array argument. */
+  readonly literalElements?: readonly {
+    readonly index: number;
+    readonly location: JavaScriptSourceRange;
+    readonly value: JavaScriptSemanticPrimitive;
+  }[];
 }
 
 /** One positional argument that may initialize one local parameter binding. */
