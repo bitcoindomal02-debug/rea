@@ -678,11 +678,35 @@ const projectCalls = (context: FileContext): void => {
         call.callSiteId,
         argument,
       );
-      if (argumentNode !== null)
+      if (argumentNode !== null) {
         context.argumentNodes.set(
           `${call.callSiteId}\u0000${String(argument.index)}`,
           argumentNode,
         );
+        for (const element of argument.literalElements ?? []) {
+          const literal = retainNode(context.state, context.file, {
+            kind: "literal",
+            roleKey: `argument-literal:${call.callSiteId}:${String(argument.index)}:${String(element.index)}`,
+            location: element.location,
+            label: JSON.stringify(element.value),
+            functionNodeId: callNode.function_node_id,
+            properties: {
+              value: element.value,
+              array_element_index: element.index,
+            },
+          });
+          // An element contributes to an array argument; it is not the
+          // complete argument value, so the edge must remain a candidate.
+          addRelation(context.state, {
+            source: literal,
+            target: argumentNode,
+            relation: "aliases",
+            resolution: "candidate",
+            properties: { array_element_index: element.index },
+            evidence: inferredSemanticEvidenceAt(context.file, element.location),
+          });
+        }
+      }
       const references = context.referenceNodesWithin(argument.location);
       for (const reference of references)
         addRelation(context.state, {
