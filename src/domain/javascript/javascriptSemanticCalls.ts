@@ -11,7 +11,11 @@ import type {
 } from "./javascriptSemanticIr.js";
 import { semanticReferenceRole } from "./javascriptSemanticProjection.js";
 import { createSemanticCallableStack } from "./javascriptSemanticCallableStack.js";
-import { semanticStaticPropertyKey } from "./javascriptAstValues.js";
+import {
+  readExactJavaScriptLiteral,
+  semanticStaticPropertyKey,
+} from "./javascriptAstValues.js";
+import type { JavaScriptSemanticPrimitive } from "./javascriptSemanticValueTypes.js";
 import {
   resolveSemanticBindingState,
   isUnshadowedGlobal,
@@ -194,6 +198,35 @@ const collectCallResultFlow = (
   }
 };
 
+/** Bound IR growth for a directly observed array argument. */
+const MAX_LITERAL_ARRAY_ARGUMENT_ELEMENTS = 64;
+
+/** Capture source literals, never execute or fold an array expression. */
+const exactLiteralArrayElements = (node: t.Expression) => {
+  if (
+    !t.isArrayExpression(node) ||
+    node.elements.length > MAX_LITERAL_ARRAY_ARGUMENT_ELEMENTS
+  )
+    return null;
+  const elements: {
+    readonly index: number;
+    readonly location: ReturnType<typeof range>;
+    readonly value: JavaScriptSemanticPrimitive;
+  }[] = [];
+  for (const [index, item] of node.elements.entries()) {
+    if (item === null) continue; // A hole is not an explicit literal value.
+    if (t.isSpreadElement(item)) return null;
+    const literal = readExactJavaScriptLiteral(item);
+    if (!literal.found) return null;
+    elements.push({
+      index,
+      location: range(item),
+      value: literal.value,
+    });
+  }
+  return elements;
+};
+
 const retainedArguments = (
   nodes: readonly (
     | t.Expression
@@ -207,10 +240,16 @@ const retainedArguments = (
   for (const [index, node] of nodes.entries()) {
     // Babel recovery can leave null slots; retain the other argument positions.
     if (node === null) continue;
+    const literalElements = t.isExpression(node)
+      ? exactLiteralArrayElements(node)
+      : null;
     retained.push({
       index,
       location: range(node),
       spread: t.isSpreadElement(node),
+      ...(literalElements !== null && literalElements.length > 0
+        ? { literalElements }
+        : {}),
     });
   }
   return retained;
